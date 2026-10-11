@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID" },
+        "email": { "type": "string", "format": "email", "description": "User email" },
+        "displayName": { "type": "string", "maxLength": 100, "description": "Full name" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Bookmark": {
+      "title": "Bookmark",
+      "description": "Saved articles and topics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Bookmark ID" },
+        "userId": { "type": "string", "description": "Owner UID" },
+        "title": { "type": "string", "maxLength": 200, "description": "Article title" },
+        "snippet": { "type": "string", "maxLength": 1000, "description": "Article summary" },
+        "url": { "type": "string", "description": "Source URL" },
+        "createdAt": { "type": "string", "description": "Saved timestamp" }
+      },
+      "required": ["id", "userId", "title", "url"]
+    },
+    "SearchHistory": {
+      "title": "SearchHistory",
+      "description": "User search history queries",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "History ID" },
+        "userId": { "type": "string", "description": "Owner UID" },
+        "query": { "type": "string", "maxLength": 200, "description": "Search query" },
+        "timestamp": { "type": "string", "description": "Search timestamp" }
+      },
+      "required": ["id", "userId", "query"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "User profile data"
+    },
+    "/users/{userId}/bookmarks/{bookmarkId}": {
+      "schema": { "$ref": "Bookmark" },
+      "description": "User bookmarks subcollection"
+    },
+    "/users/{userId}/history/{historyId}": {
+      "schema": { "$ref": "SearchHistory" },
+      "description": "User search history subcollection"
+    }
+  }
+}

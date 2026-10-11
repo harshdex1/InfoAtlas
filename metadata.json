@@ -1,0 +1,8 @@
+{
+  "name": "InfoAtlas",
+  "description": "Explore Everything. Understand Anything. AI-powered global knowledge platform with Wikimedia search, article reader, and AI assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
