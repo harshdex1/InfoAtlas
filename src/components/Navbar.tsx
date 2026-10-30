@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Globe, Bookmark, History, User as UserIcon, LogOut, Settings, Moon, Sun, Search, Sparkles, Newspaper } from "lucide-react";
+import { InfoAtlasLogo } from "./InfoAtlasLogo";
 
 interface NavbarProps {
   onNavigate: (view: "home" | "news" | "bookmarks" | "history") => void;
@@ -42,17 +43,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-6">
           <button
             onClick={() => onNavigate("home")}
-            className="flex items-center gap-2.5 group cursor-pointer text-left"
+            className="flex items-center gap-2 group cursor-pointer text-left transition-all duration-200 hover:scale-[1.02]"
+            title="InfoAtlas Home"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-              <Globe className="w-5 h-5 animate-spin-slow" />
-            </div>
-            <div>
-              <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent">
-                InfoAtlas
-              </span>
-              <span className="block text-[10px] text-slate-400 font-medium tracking-wide">Knowledge & News Platform</span>
-            </div>
+            <InfoAtlasLogo
+              variant="full"
+              size="md"
+              animated
+              isDark={isDark}
+              withTagline={false}
+            />
           </button>
 
           <nav className="hidden md:flex items-center gap-1 bg-slate-900/40 p-1 rounded-xl border border-slate-800/60">

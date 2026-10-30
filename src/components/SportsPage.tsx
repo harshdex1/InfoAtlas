@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { NewsArticle } from "../types";
-import { fetchNewsArticles, askGemini } from "../services/api";
+import { fetchNewsArticles, askGemini, translateNewsFeed } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { Trophy, Sparkles, Bookmark, Check, ExternalLink, Clock, RefreshCw, X } from "lucide-react";
+import { formatSafeTime } from "../utils/date";
 
 interface SportsPageProps {
   isDark: boolean;
@@ -15,6 +17,7 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const { addBookmark, removeBookmark, isBookmarked } = useAuth();
+  const { t, language } = useLanguage();
 
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
@@ -28,7 +31,15 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
     }
     try {
       const data = await fetchNewsArticles("sports");
-      setArticles(data);
+      let finalArticles = data;
+      if (language !== "en" && data.length > 0) {
+        try {
+          finalArticles = await translateNewsFeed(data, language);
+        } catch (tErr) {
+          console.warn("Sports translation error:", tErr);
+        }
+      }
+      setArticles(finalArticles);
       setLastUpdated(new Date());
     } catch (err) {
       console.error("Failed to load sports news:", err);
@@ -58,7 +69,7 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(interval);
     };
-  }, []);
+  }, [language]);
 
   const handleOpenAiSummary = async (article: NewsArticle, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -66,7 +77,7 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
     setIsAiLoading(true);
     setAiSummary(null);
 
-    const prompt = `Provide a concise 3-bullet executive summary and athletic significance of this sports report: "${article.title}". Description: ${article.description}`;
+    const prompt = `Provide a concise 3-bullet executive summary and athletic significance of this sports report in ${language === "hi" ? "Hindi" : "the selected language"}: "${article.title}". Description: ${article.description}`;
     const res = await askGemini(prompt, undefined, "You are InfoAtlas AI, an expert sports journalist and analyst.");
     setAiSummary(res);
     setIsAiLoading(false);
@@ -81,16 +92,18 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
           </div>
           <div>
             <h1 className={`text-2xl font-extrabold tracking-tight ${isDark ? "text-white" : "text-[#102B59]"}`}>
-              Sports Center
+              {t("sports_center", "Sports Center")}
             </h1>
-            <p className="text-xs text-[#60769A]">Live global sports news, match reports, and tournament updates</p>
+            <p className="text-xs text-[#60769A]">
+              {t("sports_center_sub", "Live global sports news, match reports, and tournament updates")}
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           {lastUpdated && (
             <span className="text-xs text-[#60769A]">
-              Updated: {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {t("last_updated_time", "Last updated")}: {formatSafeTime(lastUpdated)}
             </span>
           )}
           <button
@@ -103,7 +116,7 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
             }`}
           >
             <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isRefreshing ? "animate-spin" : ""}`} />
-            <span>{isRefreshing ? "Updating..." : "Refresh"}</span>
+            <span>{isRefreshing ? t("loading", "Updating...") : t("refresh", "Refresh")}</span>
           </button>
         </div>
       </div>
@@ -171,7 +184,7 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
                     <span className="font-semibold truncate pr-2">{article.source}</span>
                     <span className="flex items-center gap-1 shrink-0">
                       <Clock className="w-3 h-3" />
-                      {new Date(article.publishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatSafeTime(article.publishedAt)}
                     </span>
                   </div>
 
@@ -181,7 +194,7 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
                       className="flex-1 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-600 border border-emerald-500/30 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>AI Summary</span>
+                      <span>{t("ai_summary", "AI Summary")}</span>
                     </button>
 
                     <button
@@ -202,7 +215,7 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
                           ? "bg-emerald-600 border-emerald-600 text-white shadow-md"
                           : isDark ? "bg-slate-800 border-slate-700 text-slate-300" : "bg-slate-100 border-[#E0E9FA] text-[#102B59]"
                       }`}
-                      title={bookmarked ? "Bookmarked" : "Save Bookmark"}
+                      title={bookmarked ? t("bookmarked", "Bookmarked") : t("save_bookmark", "Save Bookmark")}
                     >
                       {bookmarked ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
                     </button>
@@ -215,7 +228,7 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
                       className={`p-2 rounded-xl border transition-all ${
                         isDark ? "bg-slate-800 border-slate-700 text-slate-300" : "bg-slate-100 border-[#E0E9FA] text-[#102B59]"
                       }`}
-                      title="Original Source"
+                      title={t("read_full", "Original Source")}
                     >
                       <ExternalLink className="w-4 h-4" />
                     </a>
@@ -260,7 +273,7 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
               {isAiLoading ? (
                 <div className="flex items-center justify-center h-28 gap-2 text-emerald-500">
                   <RefreshCw className="w-5 h-5 animate-spin" />
-                  <span className="text-xs font-medium">Analyzing sports report...</span>
+                  <span className="text-xs font-medium">{t("generating_summary", "Analyzing sports report...")}</span>
                 </div>
               ) : (
                 <div className="whitespace-pre-line">{aiSummary}</div>
@@ -273,9 +286,9 @@ export const SportsPage: React.FC<SportsPageProps> = ({ isDark, onSelectArticle 
                 href={selectedArticle.url}
                 target="_blank"
                 rel="noreferrer"
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition-all flex items-center gap-1.5"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition-all flex items-center gap-1.5"
               >
-                <span>Read Full Report</span>
+                <span>{t("read_full_report", "Read Full Report")}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>

@@ -1,5 +1,6 @@
 import React from "react";
 import { Compass, Atom, Cpu, Landmark, Globe, Calculator, Rocket, HeartPulse, Leaf, Briefcase, GraduationCap, Palette } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 
 interface KnowledgePageProps {
   onSearchSubmit: (query: string) => void;
@@ -21,6 +22,37 @@ const KNOWLEDGE_CATEGORIES = [
 ];
 
 export const KnowledgePage: React.FC<KnowledgePageProps> = ({ onSearchSubmit, isDark }) => {
+  const { t } = useLanguage();
+
+  const getCategoryInfo = (cat: typeof KNOWLEDGE_CATEGORIES[0]) => {
+    switch (cat.name) {
+      case "Science":
+        return { name: t("cat_science", "Science"), desc: cat.desc };
+      case "Technology":
+        return { name: t("cat_technology", "Technology"), desc: cat.desc };
+      case "History":
+        return { name: t("cat_history", "History"), desc: cat.desc };
+      case "Geography":
+        return { name: t("cat_geography", "Geography"), desc: cat.desc };
+      case "Mathematics":
+        return { name: t("cat_mathematics", "Mathematics"), desc: cat.desc };
+      case "Space & Astronomy":
+        return { name: t("cat_space", "Space & Astronomy"), desc: cat.desc };
+      case "Health & Medicine":
+        return { name: t("cat_health", "Health & Medicine"), desc: cat.desc };
+      case "Nature & Environment":
+        return { name: t("cat_environment", "Nature & Environment"), desc: cat.desc };
+      case "Business & Economics":
+        return { name: t("cat_business", "Business & Economics"), desc: cat.desc };
+      case "Education":
+        return { name: t("cat_education", "Education"), desc: cat.desc };
+      case "Arts & Culture":
+        return { name: t("cat_arts", "Arts & Culture"), desc: cat.desc };
+      default:
+        return { name: cat.name, desc: cat.desc };
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-6">
@@ -29,15 +61,18 @@ export const KnowledgePage: React.FC<KnowledgePageProps> = ({ onSearchSubmit, is
         </div>
         <div>
           <h1 className={`text-2xl font-extrabold tracking-tight ${isDark ? "text-white" : "text-[#102B59]"}`}>
-            Knowledge Encyclopedia
+            {t("knowledge_encyclopedia", "Knowledge Encyclopedia")}
           </h1>
-          <p className="text-xs text-[#60769A]">Explore authoritative encyclopedia articles powered by Wikimedia & Wikidata</p>
+          <p className="text-xs text-[#60769A]">
+            {t("knowledge_encyclopedia_sub", "Explore authoritative encyclopedia articles powered by Wikimedia & Wikidata")}
+          </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {KNOWLEDGE_CATEGORIES.map((cat, idx) => {
           const Icon = cat.icon;
+          const info = getCategoryInfo(cat);
           return (
             <button
               key={idx}
@@ -53,9 +88,9 @@ export const KnowledgePage: React.FC<KnowledgePageProps> = ({ onSearchSubmit, is
               </div>
               <div>
                 <h3 className={`text-base font-bold mb-1 ${isDark ? "text-white" : "text-[#102B59]"} group-hover:text-[#386BFF] transition-colors`}>
-                  {cat.name}
+                  {info.name}
                 </h3>
-                <p className="text-xs text-[#60769A] line-clamp-2">{cat.desc}</p>
+                <p className="text-xs text-[#60769A] line-clamp-2">{info.desc}</p>
               </div>
             </button>
           );

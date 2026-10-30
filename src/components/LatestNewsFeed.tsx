@@ -1,36 +1,72 @@
 import React, { useState, useEffect, useRef } from "react";
 import { NewsArticle } from "../types";
-import { fetchNewsArticles, askGemini } from "../services/api";
+import { fetchNewsArticles, askGemini, translateNewsFeed } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { Newspaper, Sparkles, Bookmark, Check, ExternalLink, Clock, RefreshCw, X, Flame } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
+import { Newspaper, Sparkles, Bookmark, Check, ExternalLink, Clock, RefreshCw, X, Flame, MapPin, ArrowRight, Languages } from "lucide-react";
 
 interface LatestNewsFeedProps {
   selectedCategory: string;
   onCategoryChange: (cat: string) => void;
   onSelectArticle: (article: NewsArticle) => void;
+  onNavigateToLocal?: () => void;
   isDark: boolean;
 }
 
-const FILTER_CHIPS = [
-  { id: "all", label: "Latest News" },
-  { id: "breaking", label: "Breaking News" },
-  { id: "world", label: "World News" },
-  { id: "india", label: "India News" },
-  { id: "technology", label: "Technology & AI" },
-  { id: "business", label: "Business" },
-  { id: "sports", label: "Sports" },
-  { id: "cricket", label: "Cricket" },
-  { id: "science", label: "Science" },
-  { id: "health", label: "Health" },
+const FILTER_CHIP_IDS = [
+  { id: "all", fallback: "Latest News" },
+  { id: "breaking", fallback: "Breaking News" },
+  { id: "world", fallback: "World News" },
+  { id: "india", fallback: "India News" },
+  { id: "technology", fallback: "Technology & AI" },
+  { id: "business", fallback: "Business" },
+  { id: "sports", fallback: "Sports" },
+  { id: "cricket", fallback: "Cricket" },
+  { id: "science", fallback: "Science" },
+  { id: "health", fallback: "Health" },
 ];
 
-export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory, onCategoryChange, onSelectArticle, isDark }) => {
+const getChipLabel = (id: string, t: (k: string, fb?: string) => string, fallback: string) => {
+  switch (id) {
+    case "all": return t("news", fallback);
+    case "breaking": return t("breaking_news_title", fallback);
+    case "world": return t("cat_world", fallback);
+    case "india": return t("cat_india", fallback);
+    case "technology": return t("cat_technology", fallback);
+    case "business": return t("cat_business", fallback);
+    case "sports": return t("sports", fallback);
+    case "cricket": return t("cricket", fallback);
+    case "science": return t("cat_science", fallback);
+    case "health": return t("cat_health", fallback);
+    default: return fallback;
+  }
+};
+
+const formatSafeTime = (dateVal?: Date | string | null) => {
+  if (!dateVal) return "";
+  try {
+    const d = typeof dateVal === "string" ? new Date(dateVal) : dateVal;
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return "";
+  }
+};
+
+export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({
+  selectedCategory,
+  onCategoryChange,
+  onSelectArticle,
+  onNavigateToLocal,
+  isDark,
+}) => {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string>("You’re viewing the latest available articles.");
   const { addBookmark, removeBookmark, isBookmarked } = useAuth();
+  const { t, language } = useLanguage();
+  const [statusMessage, setStatusMessage] = useState<string>("");
 
   // AI Modal
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
@@ -42,7 +78,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
   const loadNews = async (isManualRefresh = false) => {
     if (isManualRefresh) {
       setIsRefreshing(true);
-      setStatusMessage("Checking for updates…");
+      setStatusMessage(t("checking", "Checking for updates…"));
     } else {
       setIsLoading(true);
       setArticles([]); // clear previous category stale results immediately
@@ -50,24 +86,59 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
 
     try {
       const data = await fetchNewsArticles(selectedCategory);
-      if (data && data.length > 0) {
+
+      // Fetch stories published directly by Editors or Developers
+      let publishedList: NewsArticle[] = [];
+      try {
+        const pubRes = await fetch("/api/news/published");
+        if (pubRes.ok) {
+          const pubData = await pubRes.json();
+          if (Array.isArray(pubData.articles)) {
+            publishedList = pubData.articles.filter((a: any) =>
+              !a.targetTab ||
+              a.targetTab === "news" ||
+              a.targetTab === "home" ||
+              (selectedCategory !== "all" && (a.category?.toLowerCase() || "").includes(selectedCategory.toLowerCase()))
+            );
+          }
+        }
+      } catch (pErr) {
+        // Fallback silently if offline
+      }
+
+      const rawCombined = [...publishedList, ...(data || [])];
+      if (rawCombined.length > 0) {
         const seenUrls = new Set();
-        const unique = data.filter((item) => {
-          if (seenUrls.has(item.url)) return false;
-          seenUrls.add(item.url);
+        const unique = rawCombined.filter((item) => {
+          const key = item.id || item.url;
+          if (seenUrls.has(key)) return false;
+          seenUrls.add(key);
           return true;
         });
 
-        setArticles(unique);
+        let finalArticles = unique;
+        if (language !== "en") {
+          try {
+            finalArticles = await translateNewsFeed(unique, language);
+          } catch (tErr) {
+            console.warn("Feed translation error:", tErr);
+          }
+        }
+
+        setArticles(finalArticles);
         setLastUpdated(new Date());
-        setStatusMessage("You’re viewing the latest available articles.");
+        setStatusMessage(
+          language === "hi"
+            ? "आपकी चुनी हुई भाषा में ताज़ा ख़बरें प्रदर्शित हैं।"
+            : t("viewing_latest", "You’re viewing the latest available articles.")
+        );
       } else {
         setArticles([]);
-        setStatusMessage("No matching articles found.");
+        setStatusMessage(language === "hi" ? "कोई समाचार नहीं मिला।" : t("no_matching", "No matching articles found."));
       }
     } catch (err) {
       console.error("Failed to load news:", err);
-      setStatusMessage("Unable to refresh. Showing previously retrieved articles.");
+      setStatusMessage(t("unable_refresh", "Unable to refresh. Showing previously retrieved articles."));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -77,7 +148,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     loadNews(false);
-  }, [selectedCategory]);
+  }, [selectedCategory, language]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -106,7 +177,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
     setIsAiLoading(true);
     setAiSummary(null);
 
-    const prompt = `Provide a concise 3-bullet executive summary and significance of this news report: "${article.title}". Description: ${article.description}`;
+    const prompt = `Provide a concise 3-bullet executive summary and significance of this news report in ${language === "hi" ? "Hindi" : "the selected language"}: "${article.title}". Description: ${article.description}`;
     askGemini(prompt, undefined, "You are InfoAtlas AI, an expert journalistic analyst.").then((res) => {
       setAiSummary(res);
       setIsAiLoading(false);
@@ -114,7 +185,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full min-w-0 max-w-full overflow-x-hidden">
       {/* Hero Banner */}
       <div className={`relative overflow-hidden rounded-3xl p-6 sm:p-8 shadow-md text-white ${
         isDark ? "bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-800" : "bg-gradient-to-r from-[#102B59] via-[#1a3d7c] to-[#102B59]"
@@ -125,9 +196,15 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
             <Newspaper className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-300">Global Feed</span>
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">Stay Informed, Stay Ahead</h1>
-            <p className="text-xs text-slate-200 mt-0.5">Get the latest news from trusted sources around the world.</p>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-300">
+              {t("global_feed", "Global Feed")}
+            </span>
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+              {t("stay_informed", "Stay Informed, Stay Ahead")}
+            </h1>
+            <p className="text-xs text-slate-200 mt-0.5">
+              {t("stay_informed_sub", "Get the latest news from trusted sources around the world.")}
+            </p>
           </div>
         </div>
       </div>
@@ -135,7 +212,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
       {/* Category Filter Container */}
       <div className={`p-4 rounded-2xl border ${isDark ? "bg-slate-900/60 border-slate-800" : "bg-white border-[#E0E9FA] shadow-sm"}`}>
         <div className="flex items-center gap-2 flex-wrap">
-          {FILTER_CHIPS.map((chip) => (
+          {FILTER_CHIP_IDS.map((chip) => (
             <button
               key={chip.id}
               onClick={() => onCategoryChange(chip.id)}
@@ -147,20 +224,65 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
                   : "bg-[#F5F8FF] text-[#102B59] hover:bg-[#e0e9fa]"
               }`}
             >
-              {chip.label}
+              {getChipLabel(chip.id, t, chip.fallback)}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Local District News Callout Banner */}
+      {onNavigateToLocal && (
+        <div
+          onClick={onNavigateToLocal}
+          className={`p-4 rounded-2xl border flex items-center justify-between gap-4 cursor-pointer transition-all hover:scale-[1.008] ${
+            isDark
+              ? "bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900 border-blue-500/30 hover:border-blue-400"
+              : "bg-gradient-to-r from-blue-50 via-indigo-50/60 to-white border-blue-200 hover:border-blue-400 shadow-xs"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#386BFF] to-[#7252FF] text-white flex items-center justify-center shrink-0 shadow-sm">
+              <MapPin className="w-5 h-5 text-cyan-200" />
+            </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-bold flex items-center gap-2">
+                <span>{t("district_callout_title", "Looking for news in your district or state?")}</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#386BFF]/10 text-[#386BFF] border border-[#386BFF]/20">
+                  {t("new_tab", "New Tab")}
+                </span>
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                {t("district_callout_sub", "Select your state and district (e.g. Lucknow, Varanasi, Pune, Patna, etc.) for live localized coverage.")}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigateToLocal();
+            }}
+            className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#386BFF] hover:bg-blue-600 text-white text-xs font-semibold shadow-sm shrink-0 cursor-pointer"
+          >
+            <span>{t("select_area_btn", "Select Area")}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Refresh Status Row */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2 text-xs text-[#60769A]">
           <span className="font-semibold text-[#102B59]">
-            {lastUpdated ? `Last updated: ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "Checking..."}
+            {lastUpdated ? `${t("last_updated_time", "Last updated")}: ${formatSafeTime(lastUpdated)}` : t("checking", "Checking...")}
           </span>
-          <span>·</span>
-          <span>{statusMessage}</span>
+          {statusMessage && (
+            <>
+              <span>·</span>
+              <span>{statusMessage}</span>
+            </>
+          )}
         </div>
 
         <button
@@ -173,7 +295,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
           }`}
         >
           <RefreshCw className={`w-3.5 h-3.5 text-[#386BFF] ${isRefreshing ? "animate-spin" : ""}`} />
-          <span>{isRefreshing ? "Refreshing..." : "Refresh"}</span>
+          <span>{isRefreshing ? t("loading", "Refreshing...") : t("refresh", "Refresh")}</span>
         </button>
       </div>
 
@@ -224,6 +346,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
                       <img
                         src={article.thumbnail}
                         alt={article.title}
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         loading="lazy"
                         onError={(e: any) => {
@@ -268,7 +391,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
                     <span className="font-semibold truncate pr-2 text-[#102B59]">{article.source}</span>
                     <span className="flex items-center gap-1 shrink-0">
                       <Clock className="w-3 h-3" />
-                      {new Date(article.publishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatSafeTime(article.publishedAt)}
                     </span>
                   </div>
 
@@ -278,7 +401,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
                       className="flex-1 bg-[#386BFF]/10 hover:bg-[#386BFF]/20 text-[#386BFF] border border-[#386BFF]/30 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer min-w-0"
                     >
                       <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                      <span className="truncate">AI Summary</span>
+                      <span className="truncate">{t("ai_summary", "AI Summary")}</span>
                     </button>
 
                     <button
@@ -299,7 +422,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
                           ? "bg-[#386BFF] border-[#386BFF] text-white shadow-md"
                           : isDark ? "bg-slate-800 border-slate-700 text-slate-300" : "bg-slate-50 border-[#E0E9FA] text-[#102B59]"
                       }`}
-                      title={bookmarked ? "Bookmarked" : "Save Bookmark"}
+                      title={bookmarked ? t("bookmarked", "Bookmarked") : t("save_bookmark", "Save Bookmark")}
                     >
                       {bookmarked ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
                     </button>
@@ -312,7 +435,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
                       className={`p-2.5 rounded-xl border transition-all shrink-0 ${
                         isDark ? "bg-slate-800 border-slate-700 text-slate-300" : "bg-slate-50 border-[#E0E9FA] text-[#102B59]"
                       }`}
-                      title="Original Source"
+                      title={t("read_full", "Original Source")}
                     >
                       <ExternalLink className="w-4 h-4" />
                     </a>
@@ -357,7 +480,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
               {isAiLoading ? (
                 <div className="flex items-center justify-center h-28 gap-2 text-[#386BFF]">
                   <RefreshCw className="w-5 h-5 animate-spin" />
-                  <span className="text-xs font-medium">Generating AI summary...</span>
+                  <span className="text-xs font-medium">{t("generating_summary", "Generating AI summary...")}</span>
                 </div>
               ) : (
                 <div className="whitespace-pre-line">{aiSummary}</div>
@@ -372,7 +495,7 @@ export const LatestNewsFeed: React.FC<LatestNewsFeedProps> = ({ selectedCategory
                 rel="noreferrer"
                 className="bg-[#386BFF] hover:bg-blue-600 text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition-all flex items-center gap-1.5"
               >
-                <span>Read Full Report</span>
+                <span>{t("read_full_report", "Read Full Report")}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>

@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { Bookmark as BookmarkIcon, Trash2, ExternalLink, Search, ArrowLeft, Globe } from "lucide-react";
+import { formatSafeDate } from "../utils/date";
 
 interface BookmarksViewProps {
   onSelectArticle: (title: string) => void;
@@ -10,6 +12,7 @@ interface BookmarksViewProps {
 
 export const BookmarksView: React.FC<BookmarksViewProps> = ({ onSelectArticle, onBackToHome, isDark }) => {
   const { bookmarks, removeBookmark } = useAuth();
+  const { t } = useLanguage();
   const [filter, setFilter] = useState("");
 
   const filtered = bookmarks.filter(b => b.title.toLowerCase().includes(filter.toLowerCase()) || b.snippet.toLowerCase().includes(filter.toLowerCase()));
@@ -19,17 +22,17 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onSelectArticle, o
       <div className="flex items-center justify-between mb-8">
         <button
           onClick={onBackToHome}
-          className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border transition-all ${
+          className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border transition-all cursor-pointer ${
             isDark ? "bg-slate-900 border-slate-800 text-slate-300 hover:text-white" : "bg-white border-slate-200 text-slate-700 hover:text-slate-900"
           }`}
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Home</span>
+          <span>{t("home", "Home")}</span>
         </button>
 
         <h1 className={`text-xl font-bold flex items-center gap-2 ${isDark ? "text-white" : "text-slate-900"}`}>
           <BookmarkIcon className="w-5 h-5 text-indigo-400" />
-          <span>Saved Knowledge Library ({bookmarks.length})</span>
+          <span>{t("saved_bookmarks_title", "Saved Bookmarks")} ({bookmarks.length})</span>
         </h1>
       </div>
 
@@ -53,15 +56,15 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onSelectArticle, o
           <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto mb-4">
             <BookmarkIcon className="w-8 h-8" />
           </div>
-          <h2 className={`text-xl font-bold mb-2 ${isDark ? "text-white" : "text-slate-900"}`}>No bookmarks saved yet</h2>
+          <h2 className={`text-xl font-bold mb-2 ${isDark ? "text-white" : "text-slate-900"}`}>{t("no_bookmarks", "No bookmarks saved yet")}</h2>
           <p className="text-xs text-slate-400 max-w-md mx-auto mb-6">
-            Save articles while exploring InfoAtlas to build your personal knowledge repository.
+            {t("no_bookmarks_desc", "Save articles while exploring InfoAtlas to build your personal knowledge repository.")}
           </p>
           <button
             onClick={onBackToHome}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-6 py-3 rounded-xl transition-all shadow-md shadow-indigo-600/30"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-6 py-3 rounded-xl transition-all shadow-md shadow-indigo-600/30 cursor-pointer"
           >
-            Start Exploring
+            {t("explore_articles", "Explore Articles")}
           </button>
         </div>
       ) : (
@@ -79,7 +82,7 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onSelectArticle, o
                     <Globe className="w-3 h-3" />
                     <span>Saved Article</span>
                   </span>
-                  <span className="text-[10px] text-slate-500">Saved on {new Date(b.createdAt).toLocaleDateString()}</span>
+                  <span className="text-[10px] text-slate-500">Saved on {formatSafeDate(b.createdAt)}</span>
                 </div>
                 <h3 className={`text-lg font-bold mb-2 group-hover:text-indigo-400 transition-colors ${isDark ? "text-white" : "text-slate-900"}`}>
                   {b.title}

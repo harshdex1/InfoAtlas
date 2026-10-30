@@ -1,6 +1,7 @@
 import React from "react";
 import { Flame, Globe, Atom, Cpu, Trophy, HeartPulse, Landmark, TrendingUp, CloudSun } from "lucide-react";
 import { NewsArticle } from "../types";
+import { useLanguage } from "../context/LanguageContext";
 
 interface RightPanelProps {
   breakingArticles: NewsArticle[];
@@ -26,26 +27,52 @@ const TRENDING_TOPICS = [
   { rank: 5, name: "Global Economy", trend: "+12%" },
 ];
 
+const formatSafeTime = (dateStr?: string) => {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return "";
+  }
+};
+
 export const RightPanel: React.FC<RightPanelProps> = ({
   breakingArticles,
   onCategorySelect,
   onTopicSearch,
   isDark,
 }) => {
+  const { t } = useLanguage();
+  const safeBreaking = Array.isArray(breakingArticles) ? breakingArticles : [];
+
+  const getCatLabel = (id: string, fallback: string) => {
+    switch (id) {
+      case "world": return t("cat_world", fallback);
+      case "india": return t("cat_india", fallback);
+      case "technology": return t("cat_technology", fallback);
+      case "sports": return t("sports", fallback);
+      case "science": return t("cat_science", fallback);
+      case "health": return t("cat_health", fallback);
+      default: return fallback;
+    }
+  };
+
   return (
-    <aside className="space-y-6 w-full lg:w-80 shrink-0">
+    <aside className="space-y-6 w-full min-w-0 max-w-full">
       {/* Breaking News Card */}
       <div className={`p-5 rounded-3xl border ${isDark ? "bg-slate-900/60 border-slate-800" : "bg-white border-[#E0E9FA] shadow-sm"}`}>
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E0E9FA]">
           <div className="flex items-center gap-2 text-rose-600 font-bold text-xs uppercase tracking-wider">
             <Flame className="w-4 h-4 animate-pulse" />
-            <span>Breaking News</span>
+            <span>{t("breaking_news_title", "Breaking News")}</span>
           </div>
-          <span className="text-[10px] text-[#60769A]">Live Feed</span>
+          <span className="text-[10px] text-[#60769A]">{t("live_feed", "Live Feed")}</span>
         </div>
 
         <div className="space-y-3.5">
-          {breakingArticles.slice(0, 3).map((item, i) => (
+          {safeBreaking.slice(0, 3).map((item, i) => (
             <a
               key={i}
               href={item.url}
@@ -55,23 +82,23 @@ export const RightPanel: React.FC<RightPanelProps> = ({
             >
               <div className="flex items-center justify-between text-[10px] text-[#60769A] mb-1">
                 <span className="font-semibold text-[#386BFF]">{item.source}</span>
-                <span>{new Date(item.publishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>{formatSafeTime(item.publishedAt)}</span>
               </div>
               <h4 className={`text-xs font-bold leading-snug group-hover:text-[#386BFF] transition-colors line-clamp-2 ${isDark ? "text-slate-200" : "text-[#102B59]"}`}>
                 {item.title}
               </h4>
             </a>
           ))}
-          {breakingArticles.length === 0 && (
-            <p className="text-xs text-[#60769A] py-3 text-center">No active breaking news alerts right now.</p>
+          {safeBreaking.length === 0 && (
+            <p className="text-xs text-[#60769A] py-3 text-center">{t("no_breaking_news", "No active breaking news alerts right now.")}</p>
           )}
         </div>
       </div>
 
-      {/* Top Categories Image Tiles (Requirement 12) */}
+      {/* Top Categories Image Tiles */}
       <div className={`p-5 rounded-3xl border ${isDark ? "bg-slate-900/60 border-slate-800" : "bg-white border-[#E0E9FA] shadow-sm"}`}>
         <h3 className={`text-xs font-bold uppercase tracking-wider mb-4 ${isDark ? "text-white" : "text-[#102B59]"}`}>
-          Top Categories
+          {t("top_categories", "Top Categories")}
         </h3>
         <div className="grid grid-cols-3 gap-2">
           {CATEGORY_TILES.map((cat, i) => (
@@ -83,7 +110,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               <img src={cat.image} alt={cat.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
               <span className="absolute bottom-2 left-2.5 text-[11px] font-bold text-white tracking-wide">
-                {cat.label}
+                {getCatLabel(cat.id, cat.label)}
               </span>
             </button>
           ))}
@@ -95,7 +122,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-4 h-4 text-[#386BFF]" />
           <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-white" : "text-[#102B59]"}`}>
-            Trending Topics
+            {t("trending_topics", "Trending Topics")}
           </h3>
         </div>
 

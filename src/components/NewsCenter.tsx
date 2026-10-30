@@ -3,7 +3,7 @@ import { NewsArticle } from "../types";
 import { fetchNewsArticles, askGemini } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Newspaper, Search, Sparkles, Bookmark, Check, ExternalLink, Globe, Flame, RefreshCw, Clock, X } from "lucide-react";
-
+import { formatSafeTime } from "../utils/date";
 interface NewsCenterProps {
   isDark: boolean;
 }
@@ -193,7 +193,7 @@ export const NewsCenter: React.FC<NewsCenterProps> = ({ isDark }) => {
                     <span className="font-semibold text-slate-400">{article.source}</span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {new Date(article.publishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatSafeTime(article.publishedAt)}
                     </span>
                   </div>
 

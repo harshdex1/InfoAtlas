@@ -1,0 +1,44 @@
+[
+  {
+    "uid": "dev_root",
+    "email": "developer@infoatlas.app",
+    "displayName": "InfoAtlas Lead Developer",
+    "role": "developer",
+    "provider": "password",
+    "password": "2368",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "lastLoginAt": "2026-10-25T01:20:00.000Z"
+  },
+  {
+    "uid": "editor_root",
+    "email": "editor@infoatlas.app",
+    "displayName": "InfoAtlas Senior Editor",
+    "role": "editor",
+    "provider": "password",
+    "password": "2368",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "lastLoginAt": "2026-10-25T01:20:00.000Z"
+  },
+  {
+    "uid": "admin_root",
+    "email": "admin@infoatlas.app",
+    "displayName": "InfoAtlas Admin",
+    "role": "admin",
+    "provider": "password",
+    "password": "2368",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "lastLoginAt": "2026-10-25T01:18:27.996Z"
+  },
+  {
+    "uid": "g_user_ltkfoub",
+    "email": "harsheaj2000@gmail.com",
+    "displayName": "harsheaj2000",
+    "role": "editor",
+    "provider": "google",
+    "isEmailVerified": true,
+    "password": "gmail_verified",
+    "createdAt": "2026-10-25T01:15:56.016Z",
+    "lastLoginAt": "2026-10-25T01:19:24.865Z",
+    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocJ6vxTfIUpBEsz-_cKAYEwiZXwrp_6_9xU0Hy-w4MaLhXYsnQ=s96-c"
+  }
+]

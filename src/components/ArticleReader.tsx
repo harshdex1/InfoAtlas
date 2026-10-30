@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { ArticleDetail, TopicImage } from "../types";
-import { getWikipediaArticle, askGemini, fetchTopicImage } from "../services/api";
+import { getWikipediaArticle, askGemini, fetchTopicImage, translateGeneralArticle } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { ArrowLeft, Bookmark, Check, ExternalLink, Share2, Sparkles, Globe, BookOpen, MessageSquare, RefreshCw, Send } from "lucide-react";
+import { useLanguage, SUPPORTED_LANGUAGES } from "../context/LanguageContext";
+import { useNavigation } from "../context/NavigationContext";
+import { ArrowLeft, Bookmark, Check, ExternalLink, Share2, Sparkles, Globe, BookOpen, MessageSquare, RefreshCw, Send, ChevronRight, Languages } from "lucide-react";
 import { TopicImageCard } from "./TopicImageCard";
+import { LanguageSelector } from "./LanguageSelector";
+import { ArticleFollowUpModal } from "./ArticleFollowUpModal";
 
 interface ArticleReaderProps {
   title: string;
@@ -17,6 +21,29 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, onBack, isD
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const { addBookmark, removeBookmark, isBookmarked, addRecentlyViewed } = useAuth();
+  const { t, language } = useLanguage();
+  const { registerBackHandler } = useNavigation();
+  const [showFollowUpModal, setShowFollowUpModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (showFollowUpModal) {
+      const unregister = registerBackHandler(75, () => {
+        setShowFollowUpModal(false);
+        return true;
+      }, "article_reader_followup_modal");
+      return () => unregister();
+    }
+  }, [showFollowUpModal, registerBackHandler]);
+
+  // Full Article Neural Translation State
+  const [translatedArticle, setTranslatedArticle] = useState<{
+    title: string;
+    description: string;
+    extract: string;
+  } | null>(null);
+  const [isTranslating, setIsTranslating] = useState<boolean>(false);
+  const [showOriginal, setShowOriginal] = useState<boolean>(false);
+  const [translatedLang, setTranslatedLang] = useState<string>("en");
 
   // AI Assistant state
   const [aiPrompt, setAiPrompt] = useState<string>("");
@@ -68,6 +95,43 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, onBack, isD
     };
   }, [title]);
 
+  // Translation effect for Wikipedia articles
+  useEffect(() => {
+    let isMounted = true;
+    if (!article) return;
+    if (language === "en") {
+      setShowOriginal(false);
+      return;
+    }
+    if (translatedLang === language && translatedArticle) return;
+
+    async function translate() {
+      setIsTranslating(true);
+      try {
+        const res = await translateGeneralArticle({
+          title: article!.title,
+          description: article!.description,
+          extract: article!.extract,
+          targetLang: language,
+        });
+        if (isMounted && res) {
+          setTranslatedArticle(res);
+          setTranslatedLang(language);
+          setShowOriginal(false);
+        }
+      } catch (e) {
+        console.error("Wikipedia article translation error:", e);
+      } finally {
+        if (isMounted) setIsTranslating(false);
+      }
+    }
+
+    translate();
+    return () => {
+      isMounted = false;
+    };
+  }, [article, language]);
+
   const fetchAiAction = async (actionType: "summary" | "simple" | "chat", contextText: string, customPrompt?: string) => {
     setIsAiLoading(true);
     let prompt = customPrompt || "";
@@ -95,6 +159,15 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, onBack, isD
 
   const bookmarked = article ? isBookmarked(article.content_urls) : false;
 
+  const isUsingTranslation = language !== "en" && !showOriginal && !!translatedArticle;
+  const displayTitle = isUsingTranslation ? translatedArticle!.title : article?.title;
+  const displayDescription = isUsingTranslation ? translatedArticle!.description : article?.description;
+  const displayExtract = isUsingTranslation ? translatedArticle!.extract : article?.extract;
+  const currentLangItem = SUPPORTED_LANGUAGES.find((l) => l.code === language) || {
+    name: language,
+    nativeName: language,
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex items-center justify-between">
@@ -105,48 +178,62 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, onBack, isD
           }`}
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Results</span>
+          <span>{t("back_to_search", "Back to Search")}</span>
         </button>
 
-        {article && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                if (bookmarked) {
-                  removeBookmark(article.content_urls);
-                } else {
-                  addBookmark({
-                    title: article.title,
-                    snippet: article.extract.substring(0, 150) + "...",
-                    url: article.content_urls,
-                  });
-                }
-              }}
-              className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border transition-all ${
-                bookmarked
-                  ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                  : isDark
-                  ? "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
-                  : "bg-white border-slate-200 text-slate-700 hover:text-slate-900"
-              }`}
-            >
-              {bookmarked ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-              <span>{bookmarked ? "Bookmarked" : "Save Bookmark"}</span>
-            </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <LanguageSelector isDark={isDark} variant="compact" />
 
-            <a
-              href={article.content_urls}
-              target="_blank"
-              rel="noreferrer"
-              className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border transition-all ${
-                isDark ? "bg-slate-900 border-slate-800 text-slate-300 hover:text-white" : "bg-white border-slate-200 text-slate-700 hover:text-slate-900"
-              }`}
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Original Source</span>
-            </a>
-          </div>
-        )}
+          <button
+            type="button"
+            onClick={() => setShowFollowUpModal(true)}
+            className="flex items-center gap-1.5 sm:gap-2 text-xs font-bold px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-[#386BFF] to-[#7252FF] hover:from-[#2e59d9] hover:to-[#5e3ed9] text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer active:scale-95"
+            title="Ask AI follow-up questions about this topic"
+          >
+            <Sparkles className="w-4 h-4 text-cyan-200" />
+            <span>{t("ask_follow_up", "Ask Follow-Up")}</span>
+          </button>
+
+          {article && (
+            <>
+              <button
+                onClick={() => {
+                  if (bookmarked) {
+                    removeBookmark(article.content_urls);
+                  } else {
+                    addBookmark({
+                      title: article.title,
+                      snippet: article.extract.substring(0, 150) + "...",
+                      url: article.content_urls,
+                    });
+                  }
+                }}
+                className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border transition-all cursor-pointer ${
+                  bookmarked
+                    ? "bg-[#386BFF] border-[#386BFF] text-white shadow-md"
+                    : isDark
+                    ? "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                    : "bg-white border-slate-200 text-slate-700 hover:text-slate-900"
+                }`}
+              >
+                {bookmarked ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                <span>{bookmarked ? t("bookmarked", "Bookmarked") : t("save_bookmark", "Save Bookmark")}</span>
+              </button>
+
+              <a
+                href={article.content_urls}
+                target="_blank"
+                rel="noreferrer"
+                className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border transition-all ${
+                  isDark ? "bg-slate-900 border-slate-800 text-slate-300 hover:text-white" : "bg-white border-slate-200 text-slate-700 hover:text-slate-900"
+                }`}
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Original Source</span>
+              </a>
+            </>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -177,6 +264,76 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, onBack, isD
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           {/* Main Article Content */}
           <div className={`lg:col-span-2 p-8 sm:p-10 rounded-3xl border ${isDark ? "bg-slate-900/60 border-slate-800 text-slate-200" : "bg-white border-slate-200 text-slate-800"}`}>
+            {/* Multilingual Translation Status Banner */}
+            {language !== "en" && (
+              <div
+                className={`mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 transition-all ${
+                  isDark
+                    ? "bg-blue-950/40 border-blue-800/60 text-blue-200"
+                    : "bg-blue-50/80 border-blue-200 text-blue-950"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  {isTranslating ? (
+                    <RefreshCw className="w-5 h-5 text-[#386BFF] animate-spin shrink-0" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg bg-[#386BFF]/15 text-[#386BFF] flex items-center justify-center shrink-0">
+                      <Languages className="w-4 h-4" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs sm:text-sm font-bold flex items-center gap-2 flex-wrap">
+                      {isTranslating
+                        ? language === "hi"
+                          ? "ज्ञान लेख का हिन्दी में अनुवाद हो रहा है..."
+                          : `Translating article into ${currentLangItem.nativeName}...`
+                        : showOriginal
+                        ? language === "hi"
+                          ? "मूल अंग्रेज़ी संस्करण"
+                          : "Viewing Original English"
+                        : language === "hi"
+                        ? "यह ज्ञान लेख हिन्दी में अनुवादित है"
+                        : `Article translated into ${currentLangItem.nativeName}`}
+                      {!isTranslating && !showOriginal && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#386BFF]/20 text-[#386BFF] font-semibold">
+                          InfoAtlas Neural AI
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-[11px] opacity-80 mt-0.5">
+                      {isTranslating
+                        ? language === "hi"
+                          ? "शीर्षक और विस्तृत विवरण का अनुवाद किया जा रहा है..."
+                          : "Translating title and encyclopedic extract..."
+                        : showOriginal
+                        ? language === "hi"
+                          ? "अनुवादित संस्करण देखने के लिए दाएँ बटन पर क्लिक करें।"
+                          : "Click toggle to view the translated version."
+                        : language === "hi"
+                        ? "यह पूरा लेख आपकी चुनी हुई भाषा में प्रदर्शित है।"
+                        : "Entire article content is rendered in your selected language."}
+                    </p>
+                  </div>
+                </div>
+
+                {!isTranslating && translatedArticle && (
+                  <button
+                    type="button"
+                    onClick={() => setShowOriginal(!showOriginal)}
+                    className="px-3.5 py-1.5 rounded-xl border text-xs font-bold shrink-0 cursor-pointer transition-all bg-white dark:bg-slate-900 border-[#386BFF]/40 text-[#386BFF] hover:bg-[#386BFF] hover:text-white shadow-xs"
+                  >
+                    {showOriginal
+                      ? language === "hi"
+                        ? "अनुवादित देखें"
+                        : "Show Translated"
+                      : language === "hi"
+                      ? "मूल अंग्रेज़ी देखें"
+                      : "View Original"}
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center gap-2 mb-4">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 text-xs font-semibold border border-indigo-500/20">
                 <Globe className="w-3.5 h-3.5" />
@@ -185,11 +342,11 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, onBack, isD
             </div>
 
             <h1 className={`text-3xl sm:text-4xl font-extrabold tracking-tight mb-4 ${isDark ? "text-white" : "text-slate-900"}`}>
-              {article.title}
+              {displayTitle}
             </h1>
 
-            {article.description && (
-              <p className="text-sm font-medium text-indigo-400 mb-6">{article.description}</p>
+            {displayDescription && (
+              <p className="text-sm font-medium text-indigo-400 mb-6">{displayDescription}</p>
             )}
 
             {/* Educational Topic Image (Verified Source or AI Generated) */}
@@ -206,7 +363,37 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, onBack, isD
             </div>
 
             <div className="prose prose-invert max-w-none text-sm sm:text-base leading-relaxed space-y-4">
-              <p>{article.extract}</p>
+              <p>{displayExtract}</p>
+            </div>
+
+            {/* In-Article Follow-Up Card */}
+            <div className={`mt-8 p-5 sm:p-6 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+              isDark ? "bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900 border-blue-500/30" : "bg-gradient-to-r from-blue-50 via-indigo-50/60 to-white border-blue-200"
+            }`}>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#386BFF] to-[#7252FF] text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                  <Sparkles className="w-5 h-5 text-cyan-200" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold">
+                    {language === "hi" ? "इस विषय के बारे में प्रश्न पूछें" : `Ask follow-up questions about ${article.title}`}
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {language === "hi"
+                      ? "इन्फोएटलस एआई से इस विषय की पृष्ठभूमि, महत्व या किसी भी पहलू पर हिन्दी में प्रश्न पूछें।"
+                      : "Ask InfoAtlas AI follow-up questions for deeper background, historical context, or simple analogies."}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowFollowUpModal(true)}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#386BFF] to-[#7252FF] hover:from-[#2e59d9] hover:to-[#5e3ed9] text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 shrink-0 cursor-pointer active:scale-95"
+              >
+                <span>{t("ask_follow_up_btn", "Ask Follow-Up Question")}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
@@ -297,6 +484,18 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, onBack, isD
             </form>
           </div>
         </div>
+      )}
+
+      {article && (
+        <ArticleFollowUpModal
+          isOpen={showFollowUpModal}
+          onClose={() => setShowFollowUpModal(false)}
+          articleTitle={article.title}
+          articleSource="Wikimedia & Wikipedia Knowledge"
+          articleContext={`${article.title}: ${article.description || ""}\n\n${article.extract}`}
+          category="Knowledge"
+          isDark={isDark}
+        />
       )}
     </div>
   );
